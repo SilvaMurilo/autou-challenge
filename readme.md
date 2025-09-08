@@ -189,5 +189,3 @@ curl -s -X POST http://localhost:8000/process \
 5. **Retorno** estruturado (categoria, confiança, resposta, termos, etc.)
 
 ---
-
-## 🧪 Checklist rápido
