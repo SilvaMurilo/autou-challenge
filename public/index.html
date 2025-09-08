@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Processador de Emails</title>
+    <meta name="description" content="Interface acessível para upload ou colagem de emails em .txt, .pdf ou .eml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <meta name="color-scheme" content="light dark" />
+    <style>
+      .collapsible[hidden] { display: block; max-height: 0 !important; overflow: hidden; padding-block: 0 !important; margin-block: 0 !important; opacity: 0; }
+      .collapsible { transition: max-height 220ms ease, opacity 160ms ease; }
+      .segmented { display:inline-flex; gap:8px; padding:6px; border:1px solid var(--border); border-radius:12px; background: rgba(148,163,184,0.08); }
+      .segmented button { border:1px solid var(--border); border-radius:10px; padding:8px 12px; background:#0000; color:var(--text); cursor:pointer; font-weight:600; }
+      .segmented button[aria-pressed="true"] { background: linear-gradient(180deg, var(--primary), #4338ca); border-color: transparent; color:#fff; }
+
+      #results { margin-top: 18px; }
+      .result-meta { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin: 8px 0 6px; }
+      .badge { display:inline-block; padding:4px 8px; border-radius:999px; font-size:.85rem; border:1px solid var(--border); background: linear-gradient(180deg, rgba(148,163,184,0.12), rgba(148,163,184,0.05)); }
+      .badge.prod { border-color: color-mix(in oklab, var(--success) 50%, var(--border)); }
+      .badge.imp { border-color: color-mix(in oklab, var(--danger) 50%, var(--border)); }
+      .copy-row { display:flex; gap:8px; align-items:center; margin-top:8px; }
+      .copy-btn { padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:#0000; cursor:pointer; font-weight:600; }
+      .copy-btn:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--outline); }
+      .small-help { font-size:.9rem; color:var(--muted); }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      .grid-2 { display:grid; grid-template-columns: 1fr; gap: 12px; }
+      @media (min-width: 760px){ .grid-2 { grid-template-columns: 1fr 1fr; } }
+      .terms { font-size: .95rem; color: var(--muted); }
+      .hr { height:1px; background: var(--border); margin: 12px 0; border-radius:1px; }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#conteudo">Pular para o conteúdo principal</a>
+
+    <div class="container">
+      <header aria-labelledby="titulo">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">📄</div>
+          <div>
+            <h1 id="titulo">Processador de Emails</h1>
+            <p class="subtitle">Envie arquivos <strong>.txt</strong>, <strong>.pdf</strong> ou <strong>.eml</strong>, ou cole o conteúdo do e-mail.</p>
+          </div>
+        </div>
+        <div class="status" aria-live="polite" id="status"></div>
+      </header>
+
+      <main id="conteudo" class="card" aria-describedby="instrucoes-gerais">
+        <p id="instrucoes-gerais" class="help">
+          Escolha <em>uma</em> forma de envio: <strong>Arquivos</strong> <em>ou</em> <strong>Texto colado</strong>.
+        </p>
+
+        <div class="segmented" role="tablist" aria-label="Escolher forma de envio">
+          <button id="tab-files" role="tab" aria-controls="panel-files" aria-selected="true" aria-pressed="true">Arquivos</button>
+          <button id="tab-text" role="tab" aria-controls="panel-text" aria-selected="false" aria-pressed="false">Texto</button>
+        </div>
+
+        <form id="upload-form" method="post" action="http://localhost:8000/process" enctype="multipart/form-data" novalidate style="margin-top:14px;">
+          <section id="panel-files" class="collapsible" role="tabpanel" aria-labelledby="tab-files">
+            <fieldset>
+              <legend>Upload de arquivos (.txt, .pdf, .eml)</legend>
+
+              <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-controls="email_files" aria-describedby="dz-help">
+                <div>
+                  <p style="margin: 0 0 6px 0; font-weight: 700;">Arraste e solte aqui</p>
+                  <p class="help" id="dz-help">ou <kbd>Enter</kbd>/<kbd>Espaço</kbd> para selecionar até 5 arquivos</p>
+                  <p class="help">Tamanho máximo por arquivo: 10&nbsp;MB</p>
+                </div>
+                <input
+                  id="email_files"
+                  name="email_files"
+                  type="file"
+                  accept=".txt,.pdf,.eml,application/pdf,message/rfc822,text/plain"
+                  multiple
+                  aria-describedby="dz-help"
+                />
+              </div>
+
+              <ul id="file-list" class="file-list" aria-live="polite" aria-relevant="additions removals"></ul>
+              <div class="actions" style="margin-top: 10px;">
+                <button type="button" class="btn secondary" id="clear-files">Limpar arquivos</button>
+              </div>
+            </fieldset>
+          </section>
+
+          <section id="panel-text" class="collapsible" role="tabpanel" aria-labelledby="tab-text" hidden>
+            <div class="row">
+              <div>
+                <label for="email_text">Cole o texto do e-mail</label>
+                <p class="help" id="txt-help">Cole o conteúdo bruto do e-mail.</p>
+                <textarea id="email_text" name="email_text" aria-describedby="txt-help count" spellcheck="true" inputmode="text" placeholder="Cole aqui o conteúdo do e-mail..."></textarea>
+                <div id="count" class="help" aria-live="polite">0 caracteres</div>
+              </div>
+
+              <div>
+                <label for="observacoes">Observações (opcional)</label>
+                <p class="help" id="obs-help">Instruções adicionais (ex.: idioma, regras de extração, etc.).</p>
+                <textarea id="observacoes" name="observacoes" aria-describedby="obs-help" placeholder="Ex.: Responder em inglês. Ignorar assinaturas."></textarea>
+              </div>
+            </div>
+          </section>
+
+          <div id="errors" class="alert" role="alert" style="display:none"></div>
+
+          <div class="actions">
+            <button id="submit" class="btn primary" type="submit" disabled>Enviar para processamento</button>
+            <button class="btn secondary" type="reset">Limpar formulário</button>
+            <span class="help">Atalho: <kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
+          </div>
+        </form>
+
+        <section id="results" hidden aria-live="polite" aria-busy="false">
+          <div class="hr"></div>
+          <h2 style="margin-top:0">Resultados</h2>
+          <div id="results-list" class="grid-2"></div>
+        </section>
+      </main>
+
+      <footer class="help" style="margin-top: 18px;">
+        <p>
+          Acessibilidade: botões de modo são tabs com <code>role="tablist"</code>; áreas alternadas são <code>tabpanel</code> com <code>hidden</code> e <code>aria-selected</code> atualizados.
+        </p>
+      </footer>
+    </div>
+
+    <script>
+      (function () {
+        const ACCEPTED_EXT = [".txt", ".pdf", ".eml"];
+        const ACCEPTED_TYPES = ["text/plain", "application/pdf", "message/rfc822"];
+        const MAX_FILES = 5;
+        const MAX_SIZE = 10 * 1024 * 1024;
+
+        const form = document.getElementById("upload-form");
+        const tabFiles = document.getElementById("tab-files");
+        const tabText  = document.getElementById("tab-text");
+        const panelFiles = document.getElementById("panel-files");
+        const panelText  = document.getElementById("panel-text");
+
+        const dropzone = document.getElementById("dropzone");
+        const fileInput = document.getElementById("email_files");
+        const fileList = document.getElementById("file-list");
+        const clearFilesBtn = document.getElementById("clear-files");
+
+        const textarea = document.getElementById("email_text");
+        const observacoes = document.getElementById("observacoes");
+        const count = document.getElementById("count");
+
+        const submitBtn = document.getElementById("submit");
+        const errors = document.getElementById("errors");
+        const status = document.getElementById("status");
+
+        const results = document.getElementById("results");
+        const resultsList = document.getElementById("results-list");
+
+        let mode = "files";
+
+        function fmtBytes(bytes) { const u = ["B","KB","MB","GB"]; let i=0,n=bytes; while(n>=1024&&i<u.length-1){n/=1024;i++;} return `${n.toFixed(n>=100||i===0?0:1)} ${u[i]}`; }
+        function hasValidFileExtension(name){ const l=name.toLowerCase(); return ACCEPTED_EXT.some(ext=>l.endsWith(ext)); }
+        function isAcceptedType(file){ return ACCEPTED_TYPES.includes(file.type) || hasValidFileExtension(file.name); }
+        function filterValid(files){ return [...files].filter(f=>f && f.name && f.size >= 0); }
+        function renderFileList(files){
+          fileList.innerHTML=""; [...files].forEach(f=>{ const li=document.createElement("li"); li.className="file-item"; li.innerHTML=`<div><strong>${f.name}</strong><br><small>${f.type||"(desconhecido)"} · ${fmtBytes(f.size)}</small></div>`; fileList.appendChild(li); });
+          status.textContent = files.length ? `${files.length} arquivo(s) selecionado(s)` : "";
+        }
+        function showError(msg){ errors.textContent = msg; errors.style.display="block"; }
+        function clearError(){ errors.textContent=""; errors.style.display="none"; }
+
+        function setMode(next){
+          if(next===mode) return;
+          mode = next;
+          const isFiles = mode==="files";
+          tabFiles.setAttribute("aria-selected", String(isFiles));
+          tabText.setAttribute("aria-selected", String(!isFiles));
+          tabFiles.setAttribute("aria-pressed", String(isFiles));
+          tabText.setAttribute("aria-pressed", String(!isFiles));
+
+          // só alterna a visibilidade; NÃO limpa seleções
+          panelFiles.hidden = !isFiles;
+          panelText.hidden  = isFiles;
+
+          if (isFiles) { dropzone.focus(); } else { textarea.focus(); }
+          clearError();
+          updateSubmitState();
+        }
+        tabFiles.addEventListener("click", ()=>setMode("files"));
+        tabText.addEventListener("click", ()=>setMode("text"));
+        [tabFiles, tabText].forEach(btn=>{
+          btn.addEventListener("keydown",(e)=>{
+            if(e.key==="ArrowRight"||e.key==="ArrowLeft"){ e.preventDefault(); (btn===tabFiles?tabText:tabFiles).focus(); }
+            if(e.key==="Enter"||e.key===" "){ e.preventDefault(); btn.click(); }
+          });
+        });
+
+        function updateSubmitState(){
+          const hasFiles = fileInput.files && fileInput.files.length>0;
+          const hasText = textarea.value.trim().length>0;
+          submitBtn.disabled = (mode==="files") ? !hasFiles : !hasText;
+        }
+        function validateFiles(incoming){
+          const files = filterValid(incoming);
+          if(files.length>MAX_FILES){ showError(`Selecione no máximo ${MAX_FILES} arquivos.`); return null; }
+          for(const f of files){
+            if(!isAcceptedType(f)){ showError(`Formato não suportado: ${f.name}`); return null; }
+            if(f.size>MAX_SIZE){ showError(`Arquivo muito grande (${f.name}): limite de ${fmtBytes(MAX_SIZE)}.`); return null; }
+          }
+          clearError(); return files;
+        }
+
+        ["dragenter","dragover"].forEach(evt=>{
+          dropzone.addEventListener(evt,(e)=>{ e.preventDefault(); e.stopPropagation(); setMode("files"); dropzone.setAttribute("aria-busy","true"); });
+        });
+        ["dragleave","drop"].forEach(evt=>{
+          dropzone.addEventListener(evt,(e)=>{ e.preventDefault(); e.stopPropagation(); dropzone.setAttribute("aria-busy","false"); });
+        });
+        dropzone.addEventListener("drop",(e)=>{
+          const files = validateFiles(e.dataTransfer.files); if(!files) return;
+          const dt = new DataTransfer(); files.forEach(f=>dt.items.add(f));
+          fileInput.files = dt.files; renderFileList(fileInput.files); updateSubmitState();
+        });
+        dropzone.addEventListener("keydown",(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setMode("files"); fileInput.click(); }});
+        fileInput.addEventListener("change",()=>{
+          setMode("files");
+          const files = validateFiles(fileInput.files);
+          if(!files){ fileInput.value=""; renderFileList([]); updateSubmitState(); return; }
+          const dt = new DataTransfer(); files.forEach(f=>dt.items.add(f)); fileInput.files = dt.files;
+          renderFileList(files); updateSubmitState();
+        });
+        clearFilesBtn.addEventListener("click",()=>{ fileInput.value=""; renderFileList([]); updateSubmitState(); status.textContent="Arquivos limpos."; });
+
+        function updateCount(){ count.textContent = `${textarea.value.length} caracteres`; updateSubmitState(); }
+        textarea.addEventListener("input",()=>{ setMode("text"); updateCount(); });
+        updateCount();
+
+        form.addEventListener("submit", async (e)=>{
+          e.preventDefault();
+          const hasFiles = fileInput.files && fileInput.files.length>0;
+          const hasText = textarea.value.trim().length>0;
+
+          if(mode==="files" && !hasFiles){ showError("Selecione ao menos um arquivo .txt/.pdf/.eml."); dropzone.focus(); return; }
+          if(mode==="text"  && !hasText){ showError("Cole o conteúdo do e-mail."); textarea.focus(); return; }
+
+          clearError(); status.textContent="Processando..."; results.setAttribute("aria-busy","true");
+
+          const sourceLabels = [];
+          if(hasFiles){ [...fileInput.files].forEach(f=>sourceLabels.push(`Arquivo: ${f.name}`)); }
+          if(hasText){ sourceLabels.push("Texto colado"); }
+
+          const fd = new FormData(form);
+
+          // IMPORTANTÍSSIMO: enviar só o que corresponde ao modo atual
+          if(mode==="files"){
+            fd.delete("email_text"); // não manda texto quando for arquivos
+          }else{
+            // remove todos os 'email_files'
+            const toDelete = [];
+            for (const [k] of fd.entries()) if(k==="email_files") toDelete.push(k);
+            toDelete.forEach(k=>fd.delete(k));
+          }
+          fd.append("client_source_labels", JSON.stringify(sourceLabels));
+
+          try{
+            const resp = await fetch(form.action, { method:"POST", body: fd });
+            const data = await resp.json();
+            if(!resp.ok){
+              const msg = data?.error || data?.detail || "Erro ao processar.";
+              showError(msg); status.textContent=""; results.setAttribute("aria-busy","false"); return;
+            }
+            const list = Array.isArray(data?.resultados) ? data.resultados : [data];
+            renderResults(list, sourceLabels);
+            status.textContent = `Processado: ${list.length} resultado(s).`;
+          }catch(err){
+            showError("Falha na comunicação com o servidor.");
+          }finally{
+            results.setAttribute("aria-busy","false");
+          }
+        });
+
+        function renderResults(items, labels){
+          results.hidden = false;
+          resultsList.innerHTML = "";
+
+          const extraCount = Math.max(0, items.length - labels.length);
+          items.forEach((r, idx)=>{
+            const label = idx < labels.length ? labels[idx] : `Conteúdo extra detectado #${idx - labels.length + 1}`;
+            const cat = (r.categoria || "").toLowerCase().startsWith("i") ? "Improdutivo" : "Produtivo";
+            const confPct = (Number(r.confianca || 0) * 100).toFixed(1) + "%";
+            const termos = (r.termos_relevantes && r.termos_relevantes.length) ? r.termos_relevantes.join(", ") : "—";
+            const lang = r.linguagem || "—";
+            const tokens = r.tokens ?? "—";
+            const resposta = r.resposta || "";
+
+            const card = document.createElement("article");
+            card.className = "card";
+            card.setAttribute("aria-label", `Resultado ${idx + 1} para ${label}`);
+            card.innerHTML = `
+              <header style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+                <div>
+                  <h3 style="margin:0 0 4px 0;">Resultado ${idx + 1}</h3>
+                  <div class="small-help mono">${label}</div>
+                </div>
+                <div class="result-meta">
+                  <span class="badge ${cat === "Produtivo" ? "prod" : "imp"}">${cat}</span>
+                  <span class="badge" title="Confiança">${confPct}</span>
+                </div>
+              </header>
+              <div class="hr"></div>
+              <div class="terms"><strong>Termos:</strong> ${termos}</div>
+              <div class="small-help">Idioma: <span class="mono">${lang}</span> · Tokens: <span class="mono">${tokens}</span></div>
+              <label class="help" for="reply-${idx}" style="margin-top:8px; display:block;">Resposta sugerida:</label>
+              <textarea id="reply-${idx}" rows="4" class="mono" style="width:100%;">${escapeHtml(resposta)}</textarea>
+              <div class="copy-row">
+                <button class="copy-btn" type="button" data-target="reply-${idx}" aria-label="Copiar resposta do resultado ${idx + 1}">Copiar resposta</button>
+                <span class="small-help" id="copy-note-${idx}" aria-live="polite"></span>
+              </div>
+            `;
+            resultsList.appendChild(card);
+          });
+
+          // botão copiar
+          resultsList.querySelectorAll(".copy-btn").forEach(btn=>{
+            btn.addEventListener("click", async ()=>{
+              const targetId = btn.getAttribute("data-target");
+              const ta = document.getElementById(targetId);
+              const noteId = "copy-note-" + targetId.split("-")[1];
+              const note = document.getElementById(noteId);
+              try{
+                await navigator.clipboard.writeText(ta.value);
+                if(note) note.textContent = "Copiado!";
+                btn.focus();
+                setTimeout(()=>{ if(note) note.textContent=""; }, 1600);
+              }catch{
+                if(note) note.textContent = "Não foi possível copiar.";
+              }
+            });
+          });
+        }
+
+        function escapeHtml(str){
+          return String(str)
+            .replaceAll("&","&amp;")
+            .replaceAll("<","&lt;")
+            .replaceAll(">","&gt;")
+            .replaceAll('"',"&quot;")
+            .replaceAll("'","&#039;");
+        }
+
+        form.addEventListener("keydown",(e)=>{ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="enter"){ e.preventDefault(); submitBtn.click(); }});
+
+        form.addEventListener("reset",()=>{
+          setTimeout(()=>{
+            clearError();
+            fileInput.value=""; renderFileList([]);
+            textarea.value=""; observacoes.value=""; count.textContent="0 caracteres";
+            setMode("files");
+            status.textContent="Formulário limpo.";
+            results.hidden = true;
+            resultsList.innerHTML = "";
+          },0);
+        });
+      })();
+    </script>
+  </body>
+</html>
