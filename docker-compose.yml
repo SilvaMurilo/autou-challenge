@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  api:
+    image: python:3.11-slim
+    working_dir: /app
+    command: bash -lc "pip install --no-cache-dir -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - NLTK_DATA=/app/.nltk
+    volumes:
+      - ./:/app:cached
+    # Se precisar instalar algo do SO pra dev, descomente:
+    # init: true
+    # entrypoint: ["/bin/bash","-lc","apt-get update && apt-get install -y --no-install-recommends build-essential && exec \"$0\" \"$@\""]
