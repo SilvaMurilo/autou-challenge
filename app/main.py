@@ -94,7 +94,7 @@ async def process_email(
         categoria, score, termos_rule = await classify_email(part, clean_text)
         termos_final = termos_rule or termos
         resposta = await suggest_reply(
-            truncate(part, 3500), categoria, linguagem, extra_instructions=observacoes
+            truncate(part, 3500), categoria, extra_instructions=observacoes
         )
         resultados.append(
             ProcessOut(
@@ -112,8 +112,6 @@ async def process_email(
 
     return ProcessBatchOut(resultados=resultados)
 
-# --------- Frontend ---------
-# Página inicial em "/"
 @app.get("/")
 async def index():
     index_path = PUBLIC_DIR / "index.html"
@@ -121,10 +119,8 @@ async def index():
         raise HTTPException(404, "index.html não encontrado em /public")
     return FileResponse(index_path)
 
-# Arquivos estáticos (CSS/JS/imagens) em /static
 app.mount("/static", StaticFiles(directory=str(PUBLIC_DIR)), name="static")
 
-# --------- Exec local (opcional) ---------
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
